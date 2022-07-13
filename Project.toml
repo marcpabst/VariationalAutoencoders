@@ -1,6 +1,6 @@
 name = "VariationalAutoencoders"
 uuid = "5698f45e-91c1-4428-b470-12c6bd6b9623"
-authors = ["Marc Pabst <mail@marcpabst.com> and contributors"]
+authors = ["Marc Pabst and contributors"]
 version = "0.1.0"
 
 [deps]
