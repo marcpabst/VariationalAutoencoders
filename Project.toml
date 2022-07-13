@@ -1,0 +1,20 @@
+name = "VariationalAutoencoders"
+uuid = "5698f45e-91c1-4428-b470-12c6bd6b9623"
+authors = ["Marc Pabst <mail@marcpabst.com> and contributors"]
+version = "0.1.0"
+
+[deps]
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[compat]
+julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
