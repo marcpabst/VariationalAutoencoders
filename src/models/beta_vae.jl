@@ -1,8 +1,5 @@
 using Flux
 
-include("./backbones.jl")
-include("./abstract_variational_autoencoder.jl")
-
 """
 β-VAE as proposed by Higgins et al, ICLR, 2017. The beta-VAE is a new state-of-the-art framework 
 for automated discovery of interpretable factorised latent representations from raw image data in

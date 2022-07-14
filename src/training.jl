@@ -2,6 +2,9 @@ using Flux
 using ProgressMeter
 using VariationalAutoencoders
 
+"""
+Default training loop for VAEs.
+"""
 function train!(model::AbstractVariationalAutoencoder, training_data, args; start_epoch = 1)
     @info "Start Training, total $(args[:epochs]) epochs"
 

@@ -1,3 +1,4 @@
+using Flux
 
 abstract type AbstractVariationalAutoencoder end
 
