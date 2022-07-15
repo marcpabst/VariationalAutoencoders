@@ -7,6 +7,7 @@ include("misc/distributions/vonmisesfischer.jl")
 include("models/backbones.jl")
 include("models/mssim_vae.jl")
 include("models/vanilla_vae.jl")
+include("models/beta_vae.jl")
 include("models/hyperspherical_vae.jl")
 
 include("datasets/imagenet64x64.jl")
