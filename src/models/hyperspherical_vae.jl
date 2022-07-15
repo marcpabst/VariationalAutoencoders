@@ -2,6 +2,7 @@ using Flux
 using Distributions
 using Random
 using SpecialFunctions
+using LinearAlgebra
 
 """
 β-VAE as proposed by Higgins et al, ICLR, 2017. The beta-VAE is a new state-of-the-art framework 
@@ -54,6 +55,7 @@ function model_loss(model::HypersphericalVAE, x)
 
     # KL loss
     #loss_KL =  .5f0 * sum(@. (exp(2f0 * logκ) + μ^2 -1f0 - 2f0 * logκ)) / size(x)[end]
+    loss_KL = mean(KL.())
 
     loss = loss_recon + model.beta * loss_KL
 
@@ -81,9 +83,17 @@ function reconstruct(model::HypersphericalVAE, x)
     # encode input
     μ, logκ = encode(model, x)
 
+    println(normalize.(collect.(eachcol(Float64.(cpu(μ))))))
+    println(Float64.(vec(exp.(0.5 .* cpu(logκ)))))
+
     # sample from distribution
-    sample_dist = VonMisesFisher(cpu(μ), exp.(0.5 .* cpu(logκ)))
-    z = rand(sample_dist)
+    sample_dists = VonMisesFisher{Float64}.(
+        normalize.(collect.(eachcol(Float64.(cpu(μ))))), 
+        Float64.(vec(exp.(0.5 .* cpu(logκ))));
+        checknorm = false
+        )
+        
+    z = rand.(sample_dists)
 
     # decode from z
     reconstuction = decode(model, device(z))
