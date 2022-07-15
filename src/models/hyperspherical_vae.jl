@@ -94,12 +94,7 @@ function reconstruct(model::HypersphericalVAE, x)
         checknorm = false
     )
         
-<<<<<<< HEAD
     z = cat(rand.(sample_dists)..., dims = 2)
-=======
-    z = rand.(sample_dists)
-    # stack this
->>>>>>> e16ad2c505218ebe03d6f04cacc9970133c69508
 
     # decode from z
     reconstuction = decode(model, device(z))
