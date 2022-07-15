@@ -1,26 +1,40 @@
 import DataLoaders.LearnBase: getobs, nobs
-using FileIO, NPZ
+using FileIO
+using Statistics
 
 """
 ImageNet dataset downsampled to to 64x64. 
 Please note that images are loaded and kept (!) in memory.
 """
-struct ImageNet64x64
-    data::Array{UInt8, 4}
+struct ImageNet64x64{T <: Integer, U}
+    data::Array{T, 4}
+    meanimage::Union{Array{U, 4}, Nothing}
     labels::Vector{Int}
+    datatype::Type{U}
+    demean::Bool
+    normalize::Bool
 end
 
-function ImageNet64x64(path::String) 
+function ImageNet64x64(path::String; datatype::Type = Float32, demean::Bool = true, normalize::Bool = true) 
     # load file
     _f = FileIO.load(path)
 
-    @assert size(_f["data"])[end] == size(_f["labels"],1) "Number of observations must match number of labels."
+    # compute mean image if demean = true
+    meanimage = demean ? convert.(datatype, mean(_f["data"], dims=4)  ./ 255 ) : nothing
 
-    return ImageNet64x64(_f["data"], _f["labels"])
+    return ImageNet64x64(_f["data"], meanimage, _f["labels"], datatype, demean, normalize)
 end
 
+# for DataLoaders.DataLoader
 nobs(data::ImageNet64x64) = size(data.data)[end]
-getobs(data::ImageNet64x64, i) = @view data.data[:,:,:,i]
 
-Base.getindex(data::ImageNet64x64, i::Int) = getobs(data, i) 
+function getobs(data::ImageNet64x64, i) 
+    out = convert.(data.datatype, data.data[:,:,:,i])
+    out .= data.normalize ? out ./ 255 : out
+    out .= data.demean ? out .- data.meanimage : out
+    return out
+end
+
+# for MLUtils.DataLoader
+Base.getindex(data::ImageNet64x64, i) = getobs(data, i) 
 Base.length(data::ImageNet64x64) = nobs(data)

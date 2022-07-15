@@ -1,0 +1,3 @@
+using VariationalAutoencoders
+
+# setup trainin

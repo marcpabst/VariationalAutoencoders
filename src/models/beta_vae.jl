@@ -7,7 +7,7 @@ a completely unsupervised manner. This approach is a modification of the variati
 framework, and introduces an adjustable hyperparameter beta that balances latent channel capacity and 
 independence constraints with reconstruction accuracy.
 """
-struct BetaVEA
+struct BetaVEA <: AbstractVariationalAutoencoder
     in_channels::Int
     latent_dims::Int
     encoder::@NamedTuple{chain::Chain, μ::Any, logσ::Any}
@@ -30,14 +30,13 @@ function BetaVEA(in_channels::Int,
     encoder = (
         chain = encoder_backbone |> device,
         μ  = Dense(encoder_backbone_out_dim, latent_dims) |> device, # μ
-        logσ = Dense(encoder_backbone_out_dim, latent_dims)  |> device # variance
+        logσ = Dense(encoder_backbone_out_dim, latent_dims)  |> device, # variance
     )
 
     decoder = decoder_backbone |> device
     
     return BetaVEA(in_channels, 
                     latent_dims, 
-                    hidden_dims, 
                     encoder, 
                     decoder,
                     beta,
@@ -52,14 +51,14 @@ function model_loss(model::BetaVEA, x)
     μ, logσ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    loss_recon = Flux.mse(X, reconstruction)
+    loss_recon = Flux.mse(x, reconstruction)
 
     # KL loss
     loss_KL =  .5f0 * sum(@. (exp(2f0 * logσ) + μ^2 -1f0 - 2f0 * logσ)) / size(x)[end]
 
     loss = loss_recon + model.beta * loss_KL
 
-    return (loss = loss, loss_recon = recons_loss, loss_KL = KL_loss,)
+    return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL,)
 end
 
 
@@ -84,7 +83,7 @@ function reconstruct(model::BetaVEA, x)
     μ, logσ = encode(model, x)
 
     # sample from distribution
-    z = cpu(μ) + randn(typeof(first(μ)), size(cpu(logσ))) .* exp.(0.5 .* cpu(logσ))
+    z = cpu(μ) + randn(Float32, size(logσ)) .* exp.(0.5 .* cpu(logσ))
 
     # decode from z
     reconstuction = decode(model, device(z))

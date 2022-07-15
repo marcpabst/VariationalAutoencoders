@@ -43,4 +43,4 @@ end
 data, labels = load_data(files)
 
 @info "Saving file..."
-FileIO.save("/path/to/train_data.jld2", Dict("data" => data, "labels" => labels); compress=true)
+FileIO.save("/path/to/train_data.jld2", Dict("data" => data, "labels" => labels); compress=false)
