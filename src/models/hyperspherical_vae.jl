@@ -19,7 +19,8 @@ struct HypersphericalVAE <: AbstractVariationalAutoencoder
     use_gpu::Bool
 end
 
-function HypersphericalVAE(in_channels::Int, 
+function HypersphericalVAE(
+                  in_channels::Int, 
                   latent_dims::Int; 
                   encoder_backbone_out_dim = 512*4,
                   encoder_backbone = default_encoder_backbone64x64(in_channels, [32, 64, 128, 256, 512]),
@@ -94,6 +95,7 @@ function reconstruct(model::HypersphericalVAE, x)
         )
         
     z = rand.(sample_dists)
+    # stack this
 
     # decode from z
     reconstuction = decode(model, device(z))
