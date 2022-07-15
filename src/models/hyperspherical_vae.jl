@@ -5,11 +5,7 @@ using SpecialFunctions
 using LinearAlgebra
 
 """
-β-VAE as proposed by Higgins et al, ICLR, 2017. The beta-VAE is a new state-of-the-art framework 
-for automated discovery of interpretable factorised latent representations from raw image data in
-a completely unsupervised manner. This approach is a modification of the variational autoencoder (VAE) 
-framework, and introduces an adjustable hyperparameter beta that balances latent channel capacity and 
-independence constraints with reconstruction accuracy.
+Hyperspherical Variational Autoencoder as proposed by 
 """
 struct HypersphericalVAE <: AbstractVariationalAutoencoder
     in_channels::Int
