@@ -55,9 +55,16 @@ function model_loss(model::HypersphericalVAE, x)
 
     # KL loss
     #loss_KL =  .5f0 * sum(@. (exp(2f0 * logκ) + μ^2 -1f0 - 2f0 * logκ)) / size(x)[end]
-    loss_KL = mean(KL.())
 
-    loss = loss_recon + model.beta * loss_KL
+    sample_dists = VonMisesFisher2{Float64}.(
+        normalize.(collect.(eachcol(Float64.(cpu(μ))))), 
+        Float64.(vec(exp.(0.5 .* cpu(logκ))));
+        checknorm = false
+        )
+
+    loss_KL = mean(KL.(sample_dists, [HyperSphericalUniform(length(logκ))]))
+
+    loss = loss_recon + loss_KL
 
     return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL,)
 end
@@ -83,17 +90,14 @@ function reconstruct(model::HypersphericalVAE, x)
     # encode input
     μ, logκ = encode(model, x)
 
-    println(normalize.(collect.(eachcol(Float64.(cpu(μ))))))
-    println(Float64.(vec(exp.(0.5 .* cpu(logκ)))))
-
     # sample from distribution
-    sample_dists = VonMisesFisher{Float64}.(
+    sample_dists = VonMisesFisher2{Float64}.(
         normalize.(collect.(eachcol(Float64.(cpu(μ))))), 
         Float64.(vec(exp.(0.5 .* cpu(logκ))));
         checknorm = false
-        )
+    )
         
-    z = rand.(sample_dists)
+    z = cat(rand.(sample_dists)..., dims = 2)
 
     # decode from z
     reconstuction = decode(model, device(z))
@@ -108,7 +112,7 @@ function Flux.params(model::HypersphericalVAE)
                         model.decoder)
 end
 
-function entropy(d::VonMisesFisher)
+function entropy(d::VonMisesFisher2)
         m = length(d.μ)
         output = (
             -d.κ 
@@ -116,15 +120,9 @@ function entropy(d::VonMisesFisher)
             / besselix((m / 2) - 1, d.κ))
         
         return output + _log_normalization(d)
-
-        # output = (
-        #     -self.scale
-        #     * ive(self.__m / 2, self.scale)
-        #     / ive((self.__m / 2) - 1, self.scale)
-        # )
 end
 
-function _log_normalization(d::VonMisesFisher)
+function _log_normalization(d::VonMisesFisher2)
     m = length(d.μ)
     return -(
         (m / 2 - 1) * log(d.κ)
@@ -155,7 +153,6 @@ Distributions.sampler(s::HyperSphericalUniform) = HyperSphericalUniformSamplable
 function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplable, x::AbstractVector{T}) where T<:Real
     samp = rand(Normal(0, 1), s.dist.m)
     x .= samp ./ norm(samp)
- 
 end
 
 function entropy(s::HyperSphericalUniform)
@@ -167,7 +164,7 @@ function Distributions._logpdf(s::HyperSphericalUniform, x)
     return -ones(size(x)) * entropy(s)
 end
 
-function KL(vmf::VonMisesFisher, hyu::HyperSphericalUniform)
+function KL(vmf::VonMisesFisher2, hyu::HyperSphericalUniform)
     return -entropy(vmf) + entropy(hyu)
 end
 
