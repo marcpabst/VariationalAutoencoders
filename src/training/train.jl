@@ -29,7 +29,7 @@ function train!(model::AbstractVariationalAutoencoder, training_data, args;
         p = Progress(length(training_data), desc = "Epoch $epoch")
 
         for x in data_loader
-            x = pp !== nothing ? x : pp(x)
+            x = pp === nothing ? x : pp(x)
             x = x |> gpu
             
             gs = gradient(ps) do
