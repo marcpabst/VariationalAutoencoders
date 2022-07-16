@@ -19,7 +19,8 @@ export AbstractVariationalAutoencoder
 export MSSIMVAE, BetaVEA, HypersphericalVAE, VanillaVAE
 export encode, decode, reconstruct, model_loss
 export train!
-export ImageNet64x64, Random64x64
+export ImageNet64x64, imagenet64x64_preprocess, imagenet64x64_reverse_preprocess, imagenet64x64_asimage
+export Random64x64
 export VonMisesFisher2
 
 
