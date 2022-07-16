@@ -48,7 +48,8 @@ function model_loss(model::HypersphericalVAE, x)
     μ, logκ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    loss_recon = Flux.logitbinarycrossentropy(x, reconstruction)
+    loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(x), Flux.flatten(reconstruction))
+
 
     # KL loss
 
