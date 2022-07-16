@@ -15,7 +15,7 @@ struct ImageNet64x64{T <: Integer}
     labels::Vector{Int}
 end
 
-function ImageNet64x64(path::String; demean::Bool = true) 
+function ImageNet64x64(path::String) 
     # load file
     _f = FileIO.load(path)
 
