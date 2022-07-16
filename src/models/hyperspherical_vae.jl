@@ -7,7 +7,7 @@ using LinearAlgebra
 """
 Hyperspherical Variational Autoencoder as proposed by 
 """
-struct HypersphericalVAE <: AbstractVariationalAutoencoder
+mutable struct HypersphericalVAE <: AbstractVariationalAutoencoder
     in_channels::Int
     latent_dims::Int
     encoder::@NamedTuple{chain::Chain, μ::Any, logκ::Any}
@@ -28,7 +28,7 @@ function HypersphericalVAE(
     encoder = (
         chain = encoder_backbone |> device,
         μ  = Dense(encoder_backbone_out_dim, latent_dims, ) |> device, # μ
-        logκ = Chanin(Dense(encoder_backbone_out_dim, 1, σ=softplus), x -> x .+ 1f0) |> device, # add 1 to prevent collapsing
+        logκ = Dense(encoder_backbone_out_dim, 1, softplus) |> device,
     )
 
     decoder = decoder_backbone |> device
@@ -51,21 +51,24 @@ function model_loss(model::HypersphericalVAE, x)
     loss_recon = Flux.logitbinarycrossentropy(x, reconstruction)
 
     # KL loss
-    #loss_KL =  .5f0 * sum(@. (exp(2f0 * logκ) + μ^2 -1f0 - 2f0 * logκ)) / size(x)[end]
 
-    sample_dists = VonMisesFisher2{Float64}.(
-        normalize.(collect.(eachcol(Float64.(cpu(μ))))), 
-        Float64.(vec(exp.(0.5 .* cpu(logκ))));
-        checknorm = false
-        )
+    normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
+    kappas = 1 ./ Float64.(vec(1. .+ cpu(logκ)))
 
-    loss_KL = mean(KL.(sample_dists, [HyperSphericalUniform(length(logκ))]))
+    sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
+                            
+    loss_KL = [KL(dist, HyperSphericalUniform(length(logκ))) for dist in sample_dists]
+
+    loss_KL = mean(loss_KL)
 
     loss = loss_recon + loss_KL
 
-    return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL,)
+    return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL)
 end
 
+# function KL_vmf_uniform(κ, m)
+#     κ * ( besseli( m / 2, κ) / besseli( (m / 2) - 1, κ) )
+# end
 
 function encode(model::HypersphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
@@ -88,13 +91,12 @@ function reconstruct(model::HypersphericalVAE, x)
     μ, logκ = encode(model, x)
 
     # sample from distribution
-    sample_dists = VonMisesFisher2{Float64}.(
-        normalize.(collect.(eachcol(Float64.(cpu(μ))))), 
-        Float64.(vec(exp.(0.5 .* cpu(logκ))));
-        checknorm = false
-    )
+    normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
+    kappas = 1 ./ Float64.(vec(1. .+ cpu(logκ)))
+
+    sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
         
-    z = cat(rand.(sample_dists)..., dims = 2)
+    z = Float32.(cat(rand.(sample_dists)..., dims = 2))
 
     # decode from z
     reconstuction = decode(model, device(z))
