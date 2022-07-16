@@ -27,8 +27,8 @@ function HypersphericalVAE(
 
     encoder = (
         chain = encoder_backbone |> device,
-        μ  = Dense(encoder_backbone_out_dim, latent_dims) |> device, # μ
-        logκ = Dense(encoder_backbone_out_dim, 1)  |> device, # 1/variance
+        μ  = Dense(encoder_backbone_out_dim, latent_dims, ) |> device, # μ
+        logκ = Chanin(Dense(encoder_backbone_out_dim, 1, σ=softplus), x -> x .+ 1f0) |> device, # add 1 to prevent collapsing
     )
 
     decoder = decoder_backbone |> device
@@ -48,7 +48,7 @@ function model_loss(model::HypersphericalVAE, x)
     μ, logκ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    loss_recon = Flux.mse(x, reconstruction)
+    loss_recon = Flux.logitbinarycrossentropy(x, reconstruction)
 
     # KL loss
     #loss_KL =  .5f0 * sum(@. (exp(2f0 * logκ) + μ^2 -1f0 - 2f0 * logκ)) / size(x)[end]

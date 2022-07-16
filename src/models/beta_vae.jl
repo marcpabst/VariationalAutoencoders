@@ -51,7 +51,7 @@ function model_loss(model::BetaVEA, x)
     μ, logσ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    loss_recon = Flux.mse(x, reconstruction)
+    loss_recon = Flux.logitbinarycrossentropy(x, reconstruction)
 
     # KL loss
     loss_KL =  .5f0 * sum(@. (exp(2f0 * logσ) + μ^2 -1f0 - 2f0 * logσ)) / size(x)[end]
