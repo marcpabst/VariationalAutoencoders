@@ -10,8 +10,8 @@ Default training loop for VAEs.
 function train!(model::AbstractVariationalAutoencoder, training_data, args; 
                 start_epoch = 1, 
                 logdf = DataFrame(epoch = Int[], loss = Float64[], KL_loss = Float64[], recon_loss = Float64[]),
-                cb::Union{Function, Nothing},
-                pp::Union{Function, Nothing})
+                cb::Union{Function, Nothing} = nothing,
+                pp::Union{Function, Nothing} = nothing)
 
     @assert args[:epochs] >= start_epoch "Model fully trained."
 
