@@ -48,18 +48,23 @@ function model_loss(model::HypersphericalVAE, x)
     μ, logκ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(x), Flux.flatten(reconstruction))
+    loss_recon = Flux.logitbinarycrossentropy(
+            Flux.flatten(reconstruction), 
+            Flux.flatten(x);
+            agg = identity
+        )
 
+    loss_recon = sum(loss_recon; dims = 4)
+    loss_recon = mean(loss_recon)
 
     # KL loss
-
     normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
     kappas = 1 ./ Float64.(vec(1. .+ cpu(logκ)))
 
     sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
                             
-    loss_KL = [KL(dist, HyperSphericalUniform(length(logκ))) for dist in sample_dists]
-
+    #loss_KL = [KL(dist, HyperSphericalUniform(length(logκ))) for dist in sample_dists]
+    loss_KL = KL_div_stable.(model.latent_dims, kappas)
     loss_KL = mean(loss_KL)
 
     loss = loss_recon + loss_KL
@@ -95,6 +100,9 @@ function reconstruct(model::HypersphericalVAE, x)
     normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
     kappas = 1 ./ Float64.(vec(1. .+ cpu(logκ)))
 
+    println(kappas)
+    println(cpu(logκ))
+
     sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
         
     z = Float32.(cat(rand.(sample_dists)..., dims = 2))
@@ -112,22 +120,55 @@ function Flux.params(model::HypersphericalVAE)
                         model.decoder)
 end
 
+function KL_div(m, κ)
+    C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2 - 1, κ))
+
+    return κ * besseli(m/2, κ) / besseli(m/2-1, κ) 
+               + log(C(m, κ)) 
+               - log( (2 * (pi^(m/2))) / gamma(m/2) )^(-1)
+
+end
+
+
+
+"""
+Numerically stable KL divergence.
+"""
+function KL_div_stable(m, κ)
+    logC(m, κ) = 1/2 * ( (m - 2) * log(κ) - 2 * logbesseli(m/2 - 1, κ) + m * (-log(2pi)))
+
+    return κ * besselix(m/2, κ) / besselix(m/2-1, κ) 
+               + logC(m, κ)
+               - log( (2 * (pi^(m/2))) / gamma(m/2) )^(-1)
+end
+
 function entropy(d::VonMisesFisher2)
         m = length(d.μ)
+
+        # C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2-1,κ)
+
+        # return k * besseli(m/2, k) / besseli(m/2-1, k) + log(C(m, k)) - log( (2 * (pi^(m/2))) / gamma(m/2) )^()-1)
+
+        #return (d.κ^(m/2 - 1)) / ( (2π)^(m/2) * besseli(m/2,d.κ))
+
+        scale = 1 / d.κ 
+
         output = (
-            -d.κ 
-            * besselix(m / 2, d.κ)
-            / besselix((m / 2) - 1, d.κ))
+            -scale 
+            * besselix(m / 2, scale)
+            / besselix((m / 2) - 1, scale))
         
         return output + _log_normalization(d)
 end
 
 function _log_normalization(d::VonMisesFisher2)
+    scale = 1 / d.κ 
     m = length(d.μ)
+    
     return -(
-        (m / 2 - 1) * log(d.κ)
+        (m / 2 - 1) * log(scale)
         - (m / 2) * log(2 * π)
-        - (d.κ + log(besselix(m / 2 - 1, d.κ)))
+        - (scale + log(besselix(m / 2 - 1, scale)))
     )
 end
 
@@ -167,22 +208,5 @@ end
 function KL(vmf::VonMisesFisher2, hyu::HyperSphericalUniform)
     return -entropy(vmf) + entropy(hyu)
 end
-
-
-
-# import Pkg; Pkg.activate(".")
-# using Distributions, VariationalAutoencoders
-# vmf = VonMisesFisher([0.,0.], 1.)
-# hu = HyperSphericalUniform(2)
-# VariationalAutoencoders.entropy(hu)
-# KL(vmf, hu)
-
-# from hyperspherical_vae.distributions import VonMisesFisher
-# from hyperspherical_vae.distributions import HypersphericalUniform
-# import numpy as np
-# import torch
-
-# vmf = VonMisesFisher(torch.FloatTensor([[0., 0.]]), torch.FloatTensor([[1.]]))
-# hu = HypersphericalUniform(2)
 
 
