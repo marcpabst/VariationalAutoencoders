@@ -3,6 +3,7 @@ using Distributions
 using Random
 using SpecialFunctions
 using LinearAlgebra
+using ChainRulesCore
 
 """
 Hyperspherical Variational Autoencoder as proposed by 
@@ -28,7 +29,7 @@ function HypersphericalVAE(
     encoder = (
         chain = encoder_backbone |> device,
         μ  = Dense(encoder_backbone_out_dim, latent_dims, ) |> device, # μ
-        logκ = Dense(encoder_backbone_out_dim, 1, softplus) |> device,
+        logκ = Chain(Dense(encoder_backbone_out_dim, 1, softplus), x -> x .+ 1) |> device,
     )
 
     decoder = decoder_backbone |> device
@@ -48,24 +49,16 @@ function model_loss(model::HypersphericalVAE, x)
     μ, logκ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    loss_recon = Flux.logitbinarycrossentropy(
-            Flux.flatten(reconstruction), 
-            Flux.flatten(x);
-            agg = identity
-        )
+    loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x); agg = sum)
 
-    loss_recon = sum(loss_recon; dims = 4)
+    loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x), agg = identity)
+    loss_recon = sum(loss_recon, dims = 1)
     loss_recon = mean(loss_recon)
+    # loss_recon = sum(loss_recon; dims = 4)
+    # loss_recon = mean(loss_recon)
 
     # KL loss
-    normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
-    kappas = 1 ./ Float64.(vec(1. .+ cpu(logκ)))
-
-    sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
-                            
-    #loss_KL = [KL(dist, HyperSphericalUniform(length(logκ))) for dist in sample_dists]
-    loss_KL = KL_div_stable.(model.latent_dims, kappas)
-    loss_KL = mean(loss_KL)
+    loss_KL = mean(KL_div_stable.(model.latent_dims, vec(cpu(logκ))))
 
     loss = loss_recon + loss_KL
 
@@ -98,13 +91,10 @@ function reconstruct(model::HypersphericalVAE, x)
 
     # sample from distribution
     normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
-    kappas = 1 ./ Float64.(vec(1. .+ cpu(logκ)))
-
-    println(kappas)
-    println(cpu(logκ))
-
+    kappas = Float64.(vec(cpu(logκ)))
+    
     sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
-        
+    
     z = Float32.(cat(rand.(sample_dists)..., dims = 2))
 
     # decode from z
@@ -121,26 +111,43 @@ function Flux.params(model::HypersphericalVAE)
 end
 
 function KL_div(m, κ)
-    C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2 - 1, κ))
-
-    return κ * besseli(m/2, κ) / besseli(m/2-1, κ) 
-               + log(C(m, κ)) 
-               - log( (2 * (pi^(m/2))) / gamma(m/2) )^(-1)
+    return κ * besseli(m/2, κ) / besseli(m/2-1, κ) +
+               log(C(m, κ)) -
+               log( (2 * (pi^(m/2))) / gamma(m/2) )^(-1)
 
 end
 
-
+logbesseli(a,b) = b + log(besselix(a, b))
+C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2 - 1, κ))
+logC(m, κ) = 1/2 * ( (m - 2) * log(κ) - 2 * logbesseli(m/2 - 1, κ) + m * (-log(2pi)))
 
 """
 Numerically stable KL divergence.
 """
 function KL_div_stable(m, κ)
-    logC(m, κ) = 1/2 * ( (m - 2) * log(κ) - 2 * logbesseli(m/2 - 1, κ) + m * (-log(2pi)))
-
-    return κ * besselix(m/2, κ) / besselix(m/2-1, κ) 
-               + logC(m, κ)
-               - log( (2 * (pi^(m/2))) / gamma(m/2) )^(-1)
+    return κ * besselix(m / 2, κ) / besselix(m / 2 - 1, κ) +
+                logC(m, κ) -
+                log( 1/ ( (2 * (π^(m / 2))) / gamma(m / 2) ))
 end
+
+
+
+# ChainRulesCore.@scalar_rule(
+#     KL_div_stable(m, x),
+#     (
+#         ChainRulesCore.@not_implemented("Not implemented...."),
+#         KL_div(m, κ),
+#     ),
+# )
+
+# ChainRulesCore.@scalar_rule(
+#     SpecialFunctions.besselix(ν, x),
+#     (
+#         ChainRulesCore.@not_implemented(BESSEL_ORDER_INFO),
+#         ChainRulesCore.@not_implemented(BESSEL_ORDER_INFO),
+#         -(besselix(ν - 1, x) + besselix(ν + 1, x)) / 2 + Ω,
+#     ),
+# )
 
 function entropy(d::VonMisesFisher2)
         m = length(d.μ)

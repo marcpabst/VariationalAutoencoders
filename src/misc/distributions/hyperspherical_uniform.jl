@@ -3,7 +3,7 @@ struct HyperSphericalUniform <: ContinuousMultivariateDistribution
     m :: Int
 end
 
-struct HyperSpatialUniformSamplable <: Sampleable{Multivariate,Continuous}
+struct HyperSphericalUniformSamplable <: Sampleable{Multivariate,Continuous}
     dist::HyperSphericalUniform
 end
 

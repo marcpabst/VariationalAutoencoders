@@ -52,7 +52,7 @@ function small_encoder_backbone64x64(in_channels::Int, hidden_dims::Vector{Int};
 
     for h_dim in hidden_dims
         push!(encoder_chain,
-                Conv((4,4), in_channels => h_dim; stride= 2, pad = 1)
+                Conv((4,4), in_channels => h_dim, activation; stride= 2, pad = 1)
             )
             in_channels = h_dim
     end
@@ -72,13 +72,13 @@ function small_decoder_backbone64x64(latent_dims::Int, out_channels::Int, rhidde
     # add decoder layers
     for i in 1:length(rhidden_dims)-1
         push!(decoder_chain,
-                ConvTranspose((4,4), rhidden_dims[i] => rhidden_dims[i + 1], stride = 2, pad = SamePad())
+                ConvTranspose((4,4), rhidden_dims[i] => rhidden_dims[i + 1], activation, stride = 2, pad = SamePad())
         )
     end
 
     # add final layers
     push!(decoder_chain,
-        ConvTranspose((4,4), rhidden_dims[end] => out_channels, stride=2, pad = SamePad())
+        ConvTranspose((4,4), rhidden_dims[end] => out_channels, activation; stride=2, pad = SamePad())
     )
     
     return Flux.Chain(decoder_chain...)

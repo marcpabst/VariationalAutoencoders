@@ -16,6 +16,10 @@ import Distributions._rand!
 #     http://www.mitsuba-renderer.org/~wenzel/files/vmf.pdf
 #
 
+logbesseli(a,b) = b + log(besselix(a, b))
+besseli2(v, x) = exp(log(besselix(v,x)) + x)
+
+
 struct VonMisesFisher2{T<:Real} <: ContinuousMultivariateDistribution
     μ::Vector{T}
     κ::T
@@ -69,7 +73,7 @@ function _vmflck(p, κ)
     T = typeof(κ)
     hp = T(p/2)
     q = hp - 1
-    q * log(κ) - hp * log2π - log(besseli(q, κ))
+    q * log(κ) - hp * log2π - logbesseli(q, κ)
 end
 _vmflck3(κ) = log(κ) - log2π - κ - log1mexp(-2κ)
 vmflck(p, κ) = (p == 3 ? _vmflck3(κ) : _vmflck(p, κ))
@@ -132,7 +136,7 @@ function _vmf_estkappa(p::Int, ρ::Float64)
     return κ
 end
 
-_vmfA(half_p::Float64, κ::Float64) = besseli(half_p, κ) / besseli(half_p - 1.0, κ)
+_vmfA(half_p::Float64, κ::Float64) = besselix(half_p, κ) / besselix(half_p - 1.0, κ)
 
 # Sampler for von Mises-Fisher
 struct VonMisesFisher2Sampler <: Sampleable{Multivariate,Continuous}
@@ -237,3 +241,4 @@ function _vmf_householder_vec(μ::Vector{Float64})
 
     return v
 end
+

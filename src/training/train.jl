@@ -20,29 +20,36 @@ function train!(model::AbstractVariationalAutoencoder, training_data, args;
     opt = ADAM(args[:η])
     ps = Flux.params(model)
     
-    for epoch in start_epoch:args[:epochs]
+    @showprogress for epoch in start_epoch:args[:epochs]
 
         _loss, _loss_KL, _loss_recon = 0., 0., 0.
 
         data_loader = MLUtils.DataLoader(training_data; batchsize=args[:batchsize], shuffle=true)
 
-        p = Progress(length(training_data), desc = "Epoch $epoch")
+        #p = Progress(length(training_data), desc = "Epoch $epoch")
 
         for x in data_loader
             x = pp === nothing ? x : pp(x)
             x = x |> gpu
+
+            loss = nothing
             
             gs = gradient(ps) do
                 loss = model_loss(model, x)
-                _loss = loss[:loss]
-                _loss_KL = loss[:loss_KL]
-                _loss_recon = loss[:loss_recon]
-                return _loss
+                # _loss = _loss + loss[:loss]
+                # _loss_KL = _loss_KL + loss[:loss_KL]
+                # _loss_recon = _loss_recon + loss[:loss_recon]
+                
+                return loss[:loss]
             end
-    
+
+            _loss = _loss + loss[:loss]
+            _loss_KL = _loss_KL + loss[:loss_KL]
+            _loss_recon = _loss_recon + loss[:loss_recon]
+        
             Flux.update!(opt, ps, gs)
 
-            next!(p; step=size(x)[end])
+            #next!(p; step=size(x)[end])
 
         end
 
