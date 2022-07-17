@@ -34,7 +34,7 @@ function train!(model::AbstractVariationalAutoencoder, training_data, args;
             
             gs = gradient(ps) do
                 loss = model_loss(model, x)
-                _loss = loss[1]
+                _loss = loss[:loss]
                 _loss_KL = loss[:loss_KL]
                 _loss_recon = loss[:loss_recon]
                 return _loss
