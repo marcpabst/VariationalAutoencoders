@@ -26,7 +26,7 @@ function Flux.gpu(model::AbstractVariationalAutoencoder)
 end
 
 function Base.show(io::IO, model::AbstractVariationalAutoencoder)
-    println(io, "MSSIM-VAE with $(model.latent_dims) latent dimensions and $(sum(length, (Flux.params(model)))) parameters (on $(model.use_gpu ? "gpu" : "cpu")).")
+    println(io, "VAE with $(model.latent_dims) latent dimensions and $(sum(length, (Flux.params(model)))) parameters (on $(model.use_gpu ? "gpu" : "cpu")).")
 end
 
 

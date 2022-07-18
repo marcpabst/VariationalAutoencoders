@@ -4,7 +4,6 @@ using VariationalAutoencoders
 using MLUtils
 using Zygote
 using DataFrames
-using ReverseDiff
 
 """
 Default training loop for VAEs.

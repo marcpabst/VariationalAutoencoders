@@ -57,12 +57,12 @@ function model_loss(model::HypersphericalVAE, x)
     loss_recon = mean(loss_recon)
 
     # KL loss
-    normalized_mean_dirs = normalize.(transpose.(collect.(eachcol(μ))))
+    normalized_mean_dirs = normalize.(collect.(eachcol(μ)))
     kappas = vec(logκ)
 
     prior = HyperSphericalUniform(length(μ))
     dists = PowerSpherical.(normalized_mean_dirs, kappas)
-    loss_KL = KL.(dists, prior) |> mean
+    loss_KL = KL.(dists, [prior]) |> mean
 
     #loss_KL = mean([KL_div_stable(model.latent_dims, k) for k in vec(cpu(logκ))])
 
@@ -92,7 +92,7 @@ function reconstruct(model::HypersphericalVAE, x)
     μ, logκ = encode(model, x)
 
     # sample from distribution
-    normalized_mean_dirs = normalize.(transpose.(collect.(eachcol(μ))))
+    normalized_mean_dirs = normalize.(collect.(eachcol(μ)))
     kappas = vec(logκ)
 
     #prior = HyperSphericalUniform(length(μ))
@@ -146,7 +146,7 @@ end
 
 Base.length(s::HyperSphericalUniform) = s.m
 Base.length(s::HyperSphericalUniformSamplable) = s.dist.m
-Base.eltype(::HyperSphericalUniformSamplable) = Vector{Float64}
+Base.eltype(::HyperSphericalUniformSamplable) = Vector{Float32}
 Distributions.sampler(s::HyperSphericalUniform) = HyperSphericalUniformSamplable(s)
 
 function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplable, x::AbstractVector{T}) where T<:Real
@@ -154,8 +154,7 @@ function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplabl
 end
 
 function entropy(s::HyperSphericalUniform)
-    lγ = loggamma((s.m + 1) / 2)
-    return log(2) + ((s.m + 1) / 2) * log(π) - lγ
+    return -(lgamma( s.m / 2) - log(2.) + (s.m / 2) * log(pi))
 end
 
 function Distributions._logpdf(s::HyperSphericalUniform, x)
@@ -174,26 +173,26 @@ function PowerSpherical(μ::Vector{T}, κ::T) where T <: Real
     d = length(μ)
     dist1 = Beta((d - 1) / 2, (d - 1) / 2 + κ)
     dist2 = HyperSphericalUniform(d-1)
-    return HyperSphericalUniform(μ, κ, d, dist1, dist2)
+    return PowerSpherical(μ, κ, d, dist1, dist2)
 end
 
-sample(d::PowerSpherical)
+function sample(d::PowerSpherical)
     z = rand(d.dist1)
     v = rand(d.dist2)
 
-    μ = μ'
+    μ = d.μ
     t = 2 * z - 1
 
     m = sqrt(1 - t ^ 2) * v'
 
     y = [t; m]
-    e_1 = [1.; zeros(d-1)]
+    e_1 = [1.; zeros(d.d-1)]
 
     û = e_1 - μ
 
     u = normalize(û)
     
-    x = (Matrix(I, d, d) .- 2*u*u') * y
+    x = (Matrix(I, d.d, d.d) .- 2*u*u') * y
 
     normalize(x)
 end
@@ -205,7 +204,7 @@ end
 
 function entropy(d::PowerSpherical)
     alpha, beta = params(d.dist1)
-    return -(log_normalizer(d) + d.κ * (log(2) + digamma(alpha) - digamma(alpha + beta)))
+    return log_normalizer(d) + d.κ * (log(2) + digamma(alpha) - digamma(alpha + beta))
 end
 
 function KL(p::PowerSpherical, q::HyperSphericalUniform)

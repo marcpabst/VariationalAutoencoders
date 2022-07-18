@@ -31,7 +31,7 @@ export small_encoder_backbone64x64, small_decoder_backbone64x64
 
 
 export ssim
-export HyperSphericalUniform, KL
+export HyperSphericalUniform, KL, PowerSpherical, entropy
 
 
 # make diff rule from ChainRules.jl known to ForwardDiff.jl
