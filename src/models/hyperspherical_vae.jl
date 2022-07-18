@@ -4,6 +4,7 @@ using Random
 using SpecialFunctions
 using LinearAlgebra
 using ChainRulesCore
+using Distributions: log1mexp
 
 """
 Hyperspherical Variational Autoencoder as proposed by 
@@ -65,9 +66,60 @@ function model_loss(model::HypersphericalVAE, x)
     return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL)
 end
 
-# function KL_vmf_uniform(κ, m)
-#     κ * ( besseli( m / 2, κ) / besseli( (m / 2) - 1, κ) )
-# end
+using Distributions
+using Random
+using LinearAlgebra
+
+struct HyperSphericalUniform <: ContinuousMultivariateDistribution
+    m :: Int
+end
+
+struct HyperSphericalUniformSamplable <: Sampleable{Multivariate,Continuous}
+    dist::HyperSphericalUniform
+end
+
+Base.length(s::HyperSphericalUniform) = s.m
+Base.length(s::HyperSphericalUniformSamplable) = s.dist.m
+Base.eltype(::HyperSphericalUniformSamplable) = Vector{Float64}
+Distributions.sampler(s::HyperSphericalUniform) = HyperSphericalUniformSamplable(s)
+
+
+function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplable, x::AbstractVector{T}) where T<:Real
+    samp = rand(Normal(0, 1), s.dist.m)
+end
+
+function entropy(s::HyperSphericalUniform)
+    lγ = loggamma((s.m + 1) / 2)
+    return log(2) + ((s.m + 1) / 2) * log(π) - lγ
+end
+
+function Distributions._logpdf(s::HyperSphericalUniform, x)
+    return -ones(size(x)) * entropy(s)
+end
+
+function sample_from_psph(μ, κ)
+    μ = μ'
+    d = length(μ)
+
+    z = rand(Beta((d - 1) / 2, (d - 1) / 2 + κ))
+    v = rand(HyperSphericalUniform(d-1))
+    #v = rand(Uniform())
+
+    t = 2 * z - 1
+
+    m = sqrt(1 - t ^ 2) * v'
+
+    y = [t; m]
+    e_1 = [1.; zeros(d-1)]
+
+    û = e_1 - μ
+
+    u = normalize(û)
+    
+    x = (Matrix(I, d, d) .- 2*u*u') * y
+
+    normalize(x)
+end
 
 function encode(model::HypersphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
@@ -90,13 +142,12 @@ function reconstruct(model::HypersphericalVAE, x)
     μ, logκ = encode(model, x)
 
     # sample from distribution
-    normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
+    normalized_mean_dirs = normalize.(transpose.(collect.(eachcol(Float64.(cpu(μ))))))
     kappas = Float64.(vec(cpu(logκ)))
 
-    sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
+    #sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
     
-    
-    z = Float32.(cat([_rand!(MersenneTwister(), sd, [0.,.0]) for sd in sample_dists]..., dims = 2))
+    z = Float32.(cat(sample_from_psph.(normalized_mean_dirs, kappas)..., dims = 2))
 
     # decode from z
     reconstuction = decode(model, device(z))
@@ -133,88 +184,53 @@ end
 
 
 
-# ChainRulesCore.@scalar_rule(
-#     KL_div_stable(m, x),
-#     (
-#         ChainRulesCore.@not_implemented("Not implemented...."),
-#         KL_div(m, κ),
-#     ),
-# )
+# # ChainRulesCore.@scalar_rule(
+# #     KL_div_stable(m, x),
+# #     (
+# #         ChainRulesCore.@not_implemented("Not implemented...."),
+# #         KL_div(m, κ),
+# #     ),
+# # )
 
-# ChainRulesCore.@scalar_rule(
-#     SpecialFunctions.besselix(ν, x),
-#     (
-#         ChainRulesCore.@not_implemented(BESSEL_ORDER_INFO),
-#         ChainRulesCore.@not_implemented(BESSEL_ORDER_INFO),
-#         -(besselix(ν - 1, x) + besselix(ν + 1, x)) / 2 + Ω,
-#     ),
-# )
+# # ChainRulesCore.@scalar_rule(
+# #     SpecialFunctions.besselix(ν, x),
+# #     (
+# #         ChainRulesCore.@not_implemented(BESSEL_ORDER_INFO),
+# #         ChainRulesCore.@not_implemented(BESSEL_ORDER_INFO),
+# #         -(besselix(ν - 1, x) + besselix(ν + 1, x)) / 2 + Ω,
+# #     ),
+# # )
 
-function entropy(d::VonMisesFisher2)
-        m = length(d.μ)
+# function entropy(d::VonMisesFisher2)
+#         m = length(d.μ)
 
-        # C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2-1,κ)
+#         # C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2-1,κ)
 
-        # return k * besseli(m/2, k) / besseli(m/2-1, k) + log(C(m, k)) - log( (2 * (pi^(m/2))) / gamma(m/2) )^()-1)
+#         # return k * besseli(m/2, k) / besseli(m/2-1, k) + log(C(m, k)) - log( (2 * (pi^(m/2))) / gamma(m/2) )^()-1)
 
-        #return (d.κ^(m/2 - 1)) / ( (2π)^(m/2) * besseli(m/2,d.κ))
+#         #return (d.κ^(m/2 - 1)) / ( (2π)^(m/2) * besseli(m/2,d.κ))
 
-        scale = 1 / d.κ 
+#         scale = 1 / d.κ 
 
-        output = (
-            -scale 
-            * besselix(m / 2, scale)
-            / besselix((m / 2) - 1, scale))
+#         output = (
+#             -scale 
+#             * besselix(m / 2, scale)
+#             / besselix((m / 2) - 1, scale))
         
-        return output + _log_normalization(d)
-end
+#         return output + _log_normalization(d)
+# end
 
-function _log_normalization(d::VonMisesFisher2)
-    scale = 1 / d.κ 
-    m = length(d.μ)
+# function _log_normalization(d::VonMisesFisher2)
+#     scale = 1 / d.κ 
+#     m = length(d.μ)
     
-    return -(
-        (m / 2 - 1) * log(scale)
-        - (m / 2) * log(2 * π)
-        - (scale + log(besselix(m / 2 - 1, scale)))
-    )
-end
+#     return -(
+#         (m / 2 - 1) * log(scale)
+#         - (m / 2) * log(2 * π)
+#         - (scale + log(besselix(m / 2 - 1, scale)))
+#     )
+# end
 
-function besseli2(v, x)
-    return exp(log(besselix(v,x)) + x)
-end
-
-
-struct HyperSphericalUniform <: ContinuousMultivariateDistribution
-    m :: Int
-end
-
-struct HyperSphericalUniformSamplable <: Sampleable{Multivariate,Continuous}
-    dist::HyperSphericalUniform
-end
-
-Base.length(s::HyperSphericalUniform) = s.m
-Base.length(s::HyperSphericalUniformSamplable) = s.dist.m
-Base.eltype(::HyperSphericalUniformSamplable) = Vector{Float64}
-Distributions.sampler(s::HyperSphericalUniform) = HyperSphericalUniformSamplable(s)
-
-
-function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplable, x::AbstractVector{T}) where T<:Real
-    samp = rand(Normal(0, 1), s.dist.m)
-    x .= samp ./ norm(samp)
-end
-
-function entropy(s::HyperSphericalUniform)
-    lγ = loggamma((s.m + 1) / 2)
-    return log(2) + ((s.m + 1) / 2) * log(π) - lγ
-end
-
-function Distributions._logpdf(s::HyperSphericalUniform, x)
-    return -ones(size(x)) * entropy(s)
-end
-
-function KL(vmf::VonMisesFisher2, hyu::HyperSphericalUniform)
-    return -entropy(vmf) + entropy(hyu)
-end
-
-
+# function besseli2(v, x)
+#     return exp(log(besselix(v,x)) + x)
+# end
