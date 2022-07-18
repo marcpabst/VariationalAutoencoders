@@ -90,7 +90,6 @@ function _rand!(rng::AbstractRNG, d::VonMisesFisher2, x::AbstractVector)
 end
 
 function _rand!(rng::AbstractRNG, d::VonMisesFisher2, x::AbstractMatrix)
-    println("s")
     _rand!(rng, sampler(d), x)
 end
 
