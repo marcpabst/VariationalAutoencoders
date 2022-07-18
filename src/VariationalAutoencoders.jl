@@ -1,11 +1,10 @@
 module VariationalAutoencoders
 
-using ForwardDiff, NonconvexUtils
-using SpecialFunctions
+
 
 include("models/abstract_variational_autoencoder.jl")
 
-include("misc/distributions/vonmisesfischer.jl")
+#include("misc/distributions/vonmisesfischer.jl")
 
 include("models/backbones.jl")
 include("models/mssim_vae.jl")
