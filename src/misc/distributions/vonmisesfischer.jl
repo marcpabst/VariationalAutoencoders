@@ -19,7 +19,6 @@ import Distributions._rand!
 logbesseli(a,b) = b + log(besselix(a, b))
 besseli2(v, x) = exp(log(besselix(v,x)) + x)
 
-
 struct VonMisesFisher2{T<:Real} <: ContinuousMultivariateDistribution
     μ::Vector{T}
     κ::T
@@ -135,7 +134,9 @@ function _vmf_estkappa(p::Int, ρ::Float64)
     return κ
 end
 
-_vmfA(half_p::Float64, κ::Float64) = besselix(half_p, κ) / besselix(half_p - 1.0, κ)
+_vmfA(half_p::Float64, κ::Float64) = besseli(half_p, κ) / besseli(half_p - 1.0, κ)
+
+
 
 # Sampler for von Mises-Fisher
 struct VonMisesFisher2Sampler <: Sampleable{Multivariate,Continuous}
@@ -165,9 +166,47 @@ Base.length(s::VonMisesFisher2Sampler) = length(s.v)
     return x
 end
 
+@inline function _rvmf_rot!(v::AbstractVector, x::AbstractVector)
+    # rotate
+    scale = 2.0 * (v' * x)
+    #@. x -= (scale * v)
+    x = x .- (scale * v)
+    return x
+end
 
-function _rand!(rng::AbstractRNG, spl::VonMisesFisherSampler, x::AbstractVector)
+function rsample(rn,rnn, spl::VonMisesFisher2Sampler)
+    w = _rvmf_genw(rn, spl)
+ 
+    p = spl.p
+    x1 = w
+    s = 0.0
+
+    x = [x1; rnn[2:p]]
+
+    s = sum(abs2.(x[2:p]))
+    # @inbounds for i = 2:p
+    #     x[i] = xi = rnn[i]
+    #     s += abs2(xi)
+    # end
+
+    # normalize x[2:p]
+    r = sqrt((1.0 - abs2(w)) / s)
+    @inbounds for i = 2:p
+        x[i] *= r
+    end
+
+    x = [x[1]; x[2:p] .* r]
+    # @inbounds for i = 2:p
+    #     x[i] *= r
+    # end
+
+    return _rvmf_rot!(spl.v, x)
+end
+
+function _rand!(rng::AbstractRNG, spl::VonMisesFisher2Sampler, x::AbstractVector)
+    
     w = _vmf_genw(rng, spl)
+
     p = spl.p
     x[1] = w
     s = 0.0
@@ -195,7 +234,25 @@ function _vmf_genw3(rng::AbstractRNG, p, b, x0, c, κ)
     return w::Float64
 end
 
+function _rvmf_genw3(rn, p, b, x0, c, κ)
+    ξ = rn
+    w = 1.0 + (log(ξ + (1.0 - ξ)*exp(-2κ))/κ)
+    return w::Float64
+end
+
 function _vmf_genwp(rng::AbstractRNG, p, b, x0, c, κ)
+    r = (p - 1) / 2.0
+    betad = Beta(r, r)
+    z = rand(rng, betad)
+    w = (1.0 - (1.0 + b) * z) / (1.0 - (1.0 - b) * z)
+    while κ * w + (p - 1) * log(1 - x0 * w) - c < log(rand(rng))
+        z = rand(rng, betad)
+        w = (1.0 - (1.0 + b) * z) / (1.0 - (1.0 - b) * z)
+    end
+    return w::Float64
+end
+
+function _rvmf_genwp(rng::AbstractRNG, p, b, x0, c, κ)
     r = (p - 1) / 2.0
     betad = Beta(r, r)
     z = rand(rng, betad)
@@ -219,9 +276,20 @@ function _vmf_genw(rng::AbstractRNG, p, b, x0, c, κ)
     end
 end
 
-
-_vmf_genw(rng::AbstractRNG, s::VonMisesFisherSampler) =
+_vmf_genw(rng::AbstractRNG, s::VonMisesFisher2Sampler) =
     _vmf_genw(rng, s.p, s.b, s.x0, s.c, s.κ)
+
+function _rvmf_genw(rn, p, b, x0, c, κ)
+    if p == 3
+        return _rvmf_genw3(rn, p, b, x0, c, κ)
+    else
+        return _rvmf_genwp(rn, p, b, x0, c, κ)
+    end
+end
+
+
+_rvmf_genw(rn, s::VonMisesFisher2Sampler) =
+    _rvmf_genw(rn, s.p, s.b, s.x0, s.c, s.κ)
 
 function _vmf_householder_vec(μ::Vector{Float64})
     # assuming μ is a unit-vector (which it should be)
@@ -229,13 +297,15 @@ function _vmf_householder_vec(μ::Vector{Float64})
 
     p = length(μ)
     v = similar(μ)
-    v[1] = μ[1] - 1.0
-    s = sqrt(-2*v[1])
-    v[1] /= s
+    v1 = μ[1] - 1.0
+    s = sqrt(-2*v1)
+    v1 /= s
 
-    @inbounds for i in 2:p
-        v[i] = μ[i] / s
-    end
+    v = [v1; μ[2:p] ./ s]
+
+    # @inbounds for i in 2:p
+    #     v[i] = μ[i] / s
+    # end
 
     return v
 end
