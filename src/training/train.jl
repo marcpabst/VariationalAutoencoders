@@ -3,6 +3,7 @@ using ProgressMeter
 using VariationalAutoencoders
 using MLUtils
 using DataFrames
+using ReverseDiff
 
 """
 Default training loop for VAEs.

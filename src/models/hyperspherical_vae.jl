@@ -92,7 +92,8 @@ function reconstruct(model::HypersphericalVAE, x)
     # sample from distribution
     normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
     kappas = Float64.(vec(cpu(logκ)))
-    
+    println(kappas)
+    flush(stdout)
     sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
     
     z = Float32.(cat(rand.(sample_dists)..., dims = 2))
