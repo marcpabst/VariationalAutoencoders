@@ -161,33 +161,27 @@ Base.length(s::VonMisesFisher2Sampler) = length(s.v)
 @inline function _vmf_rot!(v::AbstractVector, x::AbstractVector)
     # rotate
     scale = 2.0 * (v' * x)
-    x = (scale * v)
+    @. x -= (scale * v)
     return x
 end
 
 
-function _rand!(rng::AbstractRNG, spl::VonMisesFisher2Sampler, x::AbstractVector)
+function _rand!(rng::AbstractRNG, spl::VonMisesFisherSampler, x::AbstractVector)
     w = _vmf_genw(rng, spl)
     p = spl.p
-    
-    
-    x_1 = w
-
+    x[1] = w
     s = 0.0
-
-    x = [x_1; [randn(rng) for i in 2:p] ]
-
-    s = sum(abs2.(x[2:end]))
-    # @inbounds for i = 2:p
-    #     x[i] = xi = randn(rng)
-    #     s += abs2(xi)
-    # end
+    @inbounds for i = 2:p
+        x[i] = xi = randn(rng)
+        s += abs2(xi)
+    end
 
     # normalize x[2:p]
     r = sqrt((1.0 - abs2(w)) / s)
+    @inbounds for i = 2:p
+        x[i] *= r
+    end
 
-    x = [x[1]; x[2:end] .* r]
- 
     return _vmf_rot!(spl.v, x)
 end
 
@@ -226,7 +220,7 @@ function _vmf_genw(rng::AbstractRNG, p, b, x0, c, κ)
 end
 
 
-_vmf_genw(rng::AbstractRNG, s::VonMisesFisher2Sampler) =
+_vmf_genw(rng::AbstractRNG, s::VonMisesFisherSampler) =
     _vmf_genw(rng, s.p, s.b, s.x0, s.c, s.κ)
 
 function _vmf_householder_vec(μ::Vector{Float64})
@@ -235,15 +229,13 @@ function _vmf_householder_vec(μ::Vector{Float64})
 
     p = length(μ)
     v = similar(μ)
-    v1 = μ[1] - 1.0
-    s = sqrt(-2*v1)
-    # v[1] /= s
-    v_1 = 
-    v = [ s; [ μ[i] / s for i in 2:p]]
-    # @inbounds for i in 2:p
-    #     v[i] = μ[i] / s
-    # end
+    v[1] = μ[1] - 1.0
+    s = sqrt(-2*v[1])
+    v[1] /= s
+
+    @inbounds for i in 2:p
+        v[i] = μ[i] / s
+    end
 
     return v
 end
-
