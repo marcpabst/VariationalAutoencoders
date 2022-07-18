@@ -204,7 +204,7 @@ end
 
 function entropy(d::PowerSpherical)
     alpha, beta = params(d.dist1)
-    return -(log_normalizer(d) + d.κ * (log(2) + digamma(alpha) - digamma(alpha + beta)))
+    return (log_normalizer(d) + d.κ * (log(2) + digamma(alpha) - digamma(alpha + beta)))
 end
 
 function KL(p::PowerSpherical, q::HyperSphericalUniform)
