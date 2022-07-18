@@ -57,8 +57,8 @@ function model_loss(model::HypersphericalVAE, x)
     loss_recon = mean(loss_recon)
 
     # KL loss
-    normalized_mean_dirs = normalize.(collect.(eachcol(μ)))
-    kappas = vec(logκ)
+    normalized_mean_dirs = cpu(normalize.(collect.(eachcol(μ))))
+    kappas = cpu(vec(logκ))
 
     prior = HyperSphericalUniform(length(μ))
     dists = PowerSpherical.(normalized_mean_dirs, kappas)
@@ -92,8 +92,8 @@ function reconstruct(model::HypersphericalVAE, x)
     μ, logκ = encode(model, x)
 
     # sample from distribution
-    normalized_mean_dirs = normalize.(collect.(eachcol(μ)))
-    kappas = vec(logκ)
+    normalized_mean_dirs = cpu(normalize.(collect.(eachcol(μ))))
+    kappas = cpu(vec(logκ))
 
     #prior = HyperSphericalUniform(length(μ))
     dists = PowerSpherical.(normalized_mean_dirs, kappas)
