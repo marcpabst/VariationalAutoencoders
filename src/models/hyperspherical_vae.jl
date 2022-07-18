@@ -49,7 +49,7 @@ function model_loss(model::HypersphericalVAE, x)
     μ, logκ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x); agg = sum)
+    #loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x); agg = sum)
 
     loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x), agg = identity)
     loss_recon = sum(loss_recon, dims = 1)
@@ -92,11 +92,11 @@ function reconstruct(model::HypersphericalVAE, x)
     # sample from distribution
     normalized_mean_dirs = normalize.(collect.(eachcol(Float64.(cpu(μ)))))
     kappas = Float64.(vec(cpu(logκ)))
-    println(kappas)
-    flush(stdout)
+
     sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
     
-    z = Float32.(cat([rand(sd) for sd in sample_dists]..., dims = 2))
+    
+    z = Float32.(cat([_rand!(MersenneTwister(), sd, [0.,.0]) for sd in sample_dists]..., dims = 2))
 
     # decode from z
     reconstuction = decode(model, device(z))
