@@ -96,8 +96,8 @@ function reconstruct(model::HypersphericalVAE, x)
     kappas = cpu(vec(logκ))
 
     #prior = HyperSphericalUniform(length(μ))
-    dists = PowerSpherical.(normalized_mean_dirs, kappas)
-    z = cat(sample.(dists)..., dims = 2)
+    dists = [PowerSpherical(_mu, _kappa) for (_mu,_kappa) in zip(normalized_mean_dirs, kappas)]
+    z = hcat([sample(d) for d in dists]...)
 
     # decode from z
     reconstuction = decode(model, device(z))
@@ -154,7 +154,7 @@ function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplabl
 end
 
 function entropy(s::HyperSphericalUniform)
-    return -(lgamma( s.m / 2) - log(2.) + (s.m / 2) * log(pi))
+    return 1/2 * s.m * log(pi) - lgamma(s.m/2) + log(2)
 end
 
 function Distributions._logpdf(s::HyperSphericalUniform, x)
@@ -171,7 +171,7 @@ end
 
 function PowerSpherical(μ::Vector{T}, κ::T) where T <: Real
     d = length(μ)
-    dist1 = Beta((d - 1) / 2, (d - 1) / 2 + κ)
+    dist1 = Beta((d - 1) / 2. + κ, (d - 1) / 2.)
     dist2 = HyperSphericalUniform(d-1)
     return PowerSpherical(μ, κ, d, dist1, dist2)
 end
@@ -194,17 +194,22 @@ function sample(d::PowerSpherical)
     
     x = (Matrix(I, d.d, d.d) .- 2*u*u') * y
 
-    normalize(x)
+    -normalize(x)
+end
+
+function normalizer(d::PowerSpherical)
+    a, b = params(d.dist1)
+    return 2^(a+b) * pi^(b) * gamma(a) / gamma(b)
 end
 
 function log_normalizer(d::PowerSpherical)
-    alpha, beta = params(d.dist1)
-    return -((alpha + beta) * log(2) + lgamma(alpha) - lgamma(alpha + beta) + beta * log(pi))
+    a, b = params(d.dist1)
+    return -( (a+b) * log(2) + lgamma(a) + b * log(pi) - lgamma(a+b))
 end
 
 function entropy(d::PowerSpherical)
-    alpha, beta = params(d.dist1)
-    return (log_normalizer(d) + d.κ * (log(2) + digamma(alpha) - digamma(alpha + beta)))
+    a, b = params(d.dist1)
+    return -(log_normalizer(d) + d.κ * ( log(2) + digamma(a) - digamma(a+b)))
 end
 
 function KL(p::PowerSpherical, q::HyperSphericalUniform)
