@@ -161,7 +161,7 @@ Base.length(s::VonMisesFisher2Sampler) = length(s.v)
 @inline function _vmf_rot!(v::AbstractVector, x::AbstractVector)
     # rotate
     scale = 2.0 * (v' * x)
-    x -= (scale * v)
+    x = (scale * v)
     return x
 end
 
@@ -169,19 +169,25 @@ end
 function _rand!(rng::AbstractRNG, spl::VonMisesFisher2Sampler, x::AbstractVector)
     w = _vmf_genw(rng, spl)
     p = spl.p
-    x[1] = w
+    
+    
+    x_1 = w
+
     s = 0.0
-    @inbounds for i = 2:p
-        x[i] = xi = randn(rng)
-        s += abs2(xi)
-    end
+
+    x = [x_1; [randn(rng) for i in 2:p] ]
+
+    s = sum(abs2.(x[2:end]))
+    # @inbounds for i = 2:p
+    #     x[i] = xi = randn(rng)
+    #     s += abs2(xi)
+    # end
 
     # normalize x[2:p]
     r = sqrt((1.0 - abs2(w)) / s)
-    @inbounds for i = 2:p
-        x[i] *= r
-    end
 
+    x = [x[1]; x[2:end] .* r]
+ 
     return _vmf_rot!(spl.v, x)
 end
 
