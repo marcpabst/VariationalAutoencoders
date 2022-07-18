@@ -2,7 +2,9 @@ using Flux
 using ProgressMeter
 using VariationalAutoencoders
 using MLUtils
+using Zygote
 using DataFrames
+using ReverseDiff
 
 """
 Default training loop for VAEs.
@@ -33,13 +35,9 @@ function train!(model::AbstractVariationalAutoencoder, training_data, args;
             x = x |> gpu
 
             loss = nothing
-            
-            gs = gradient(ps) do
+
+            gs = Zygote.gradient(ps) do
                 loss = model_loss(model, x)
-                # _loss = _loss + loss[:loss]
-                # _loss_KL = _loss_KL + loss[:loss_KL]
-                # _loss_recon = _loss_recon + loss[:loss_recon]
-                
                 return loss[:loss]
             end
 

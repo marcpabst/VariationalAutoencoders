@@ -36,12 +36,12 @@ export HyperSphericalUniform, KL
 
 
 # make diff rule from ChainRules.jl known to ForwardDiff.jl
-NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselix(x1::ForwardDiff.Dual, x2::ForwardDiff.Dual)
-NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselyx(x1::ForwardDiff.Dual, x2::ForwardDiff.Dual)
-NonconvexUtils.@ForwardDiff_frule SpecialFunctions.bessely(x1::ForwardDiff.Dual, x2::ForwardDiff.Dual)
+# NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselix(x1::ForwardDiff.Dual, x2::ForwardDiff.Dual)
+# NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselyx(x1::ForwardDiff.Dual, x2::ForwardDiff.Dual)
+# NonconvexUtils.@ForwardDiff_frule SpecialFunctions.bessely(x1::ForwardDiff.Dual, x2::ForwardDiff.Dual)
 
-NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselix(x1::Real, x2::ForwardDiff.Dual)
-NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselyx(x1::Real, x2::ForwardDiff.Dual)
-NonconvexUtils.@ForwardDiff_frule SpecialFunctions.bessely(x1::Real, x2::ForwardDiff.Dual)
+# NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselix(x1::Real, x2::ForwardDiff.Dual)
+# NonconvexUtils.@ForwardDiff_frule SpecialFunctions.besselyx(x1::Real, x2::ForwardDiff.Dual)
+# NonconvexUtils.@ForwardDiff_frule SpecialFunctions.bessely(x1::Real, x2::ForwardDiff.Dual)
 
 end

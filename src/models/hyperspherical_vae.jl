@@ -58,7 +58,7 @@ function model_loss(model::HypersphericalVAE, x)
     # loss_recon = mean(loss_recon)
 
     # KL loss
-    loss_KL = mean(KL_div_stable.(model.latent_dims, vec(cpu(logκ))))
+    loss_KL = mean([KL_div_stable(model.latent_dims, k) for k in vec(cpu(logκ))])
 
     loss = loss_recon + loss_KL
 
@@ -95,7 +95,7 @@ function reconstruct(model::HypersphericalVAE, x)
     
     sample_dists = [VonMisesFisher2{Float64}(_μ, _κ, checknorm = false) for (_μ,_κ) in zip(normalized_mean_dirs, kappas)]
     
-    z = Float32.(cat(rand.(sample_dists)..., dims = 2))
+    z = Float32.(cat([rand(sd) for sd in sample_dists]..., dims = 2))
 
     # decode from z
     reconstuction = decode(model, device(z))
