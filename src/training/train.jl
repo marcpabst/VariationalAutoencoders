@@ -3,6 +3,8 @@ using ProgressMeter
 using VariationalAutoencoders
 using MLUtils
 using Zygote
+using CUDA
+using Random
 using DataFrames
 
 """
@@ -12,7 +14,10 @@ function train!(model::AbstractVariationalAutoencoder, training_data, args;
                 start_epoch = 1, 
                 logdf = DataFrame(epoch = Int[], loss = Float64[], KL_loss = Float64[], recon_loss = Float64[]),
                 cb::Union{Function, Nothing} = nothing,
-                pp::Union{Function, Nothing} = nothing)
+                pp::Union{Function, Nothing} = nothing,
+                seed = 42)
+
+    Random.seed!(seed); CUDA.seed!(seed)
 
     @assert args[:epochs] >= start_epoch "Model fully trained."
 

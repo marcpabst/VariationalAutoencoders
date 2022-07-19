@@ -78,7 +78,7 @@ function small_decoder_backbone64x64(latent_dims::Int, out_channels::Int, rhidde
 
     # add final layers
     push!(decoder_chain,
-        ConvTranspose((4,4), rhidden_dims[end] => out_channels, activation; stride=2, pad = SamePad())
+        ConvTranspose((4,4), rhidden_dims[end] => out_channels; stride=2, pad = SamePad())
     )
     
     return Flux.Chain(decoder_chain...)

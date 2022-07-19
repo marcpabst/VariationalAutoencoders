@@ -3,8 +3,10 @@ using Distributions
 using Random
 using SpecialFunctions
 using LinearAlgebra
+using CUDA
 using ChainRulesCore
 using Distributions: log1mexp
+
 
 """
 Hyperspherical Variational Autoencoder as proposed by 
@@ -23,7 +25,11 @@ function HypersphericalVAE(
                   encoder_backbone_out_dim = 512*4,
                   encoder_backbone = default_encoder_backbone64x64(in_channels, [32, 64, 128, 256, 512]),
                   decoder_backbone = default_decoder_backbone64x64(latent_dims, in_channels, reverse([32, 64, 128, 256, 512])),
-                  use_gpu = false)
+                  use_gpu = false,
+                  seed = 42)
+    
+
+    Random.seed!(seed); CUDA.seed!(seed)
 
     device = use_gpu ? gpu : cpu
 
@@ -50,7 +56,7 @@ function model_loss(model::HypersphericalVAE, x)
     μ, logκ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    #loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x); agg = sum)
+    #loss_recon = Flux.logitbinarycrossentropy(reconstruction, x; agg = sum) / size(x,4)
 
     loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x), agg = identity)
     loss_recon = sum(loss_recon, dims = 1)
@@ -60,7 +66,7 @@ function model_loss(model::HypersphericalVAE, x)
     normalized_mean_dirs = cpu(normalize.(collect.(eachcol(μ))))
     kappas = cpu(vec(logκ))
 
-    prior = HyperSphericalUniform(length(μ))
+    prior = HyperSphericalUniform(2)
     dists = PowerSpherical.(normalized_mean_dirs, kappas)
     loss_KL = KL.(dists, [prior]) |> mean
 
@@ -97,10 +103,10 @@ function reconstruct(model::HypersphericalVAE, x)
 
     #prior = HyperSphericalUniform(length(μ))
     dists = [PowerSpherical(_mu, _kappa) for (_mu,_kappa) in zip(normalized_mean_dirs, kappas)]
-    z = hcat([sample(d) for d in dists]...)
+    z = hcat([sample(d) for d in dists]...) |> device
 
     # decode from z
-    reconstuction = decode(model, device(z))
+    reconstuction = decode(model, z)
 
     return μ, logκ, reconstuction
 end
@@ -135,7 +141,6 @@ end
 
 # Distributions
 
-
 struct HyperSphericalUniform <: ContinuousMultivariateDistribution
     m :: Int
 end
@@ -146,7 +151,7 @@ end
 
 Base.length(s::HyperSphericalUniform) = s.m
 Base.length(s::HyperSphericalUniformSamplable) = s.dist.m
-Base.eltype(::HyperSphericalUniformSamplable) = Vector{Float32}
+Base.eltype(::HyperSphericalUniformSamplable) = Float32
 Distributions.sampler(s::HyperSphericalUniform) = HyperSphericalUniformSamplable(s)
 
 function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplable, x::AbstractVector{T}) where T<:Real
@@ -186,13 +191,13 @@ function sample(d::PowerSpherical)
     m = sqrt(1 - t ^ 2) * v'
 
     y = [t; m]
-    e_1 = [1.; zeros(d.d-1)]
+    e_1 = [1.; zeros(eltype(d.μ), d.d-1)]
 
     û = e_1 - μ
 
     u = normalize(û)
     
-    x = (Matrix(I, d.d, d.d) .- 2*u*u') * y
+    x = (Matrix{eltype(d.μ)}(I, d.d, d.d) .- 2*u*u') * y
 
     -normalize(x)
 end
