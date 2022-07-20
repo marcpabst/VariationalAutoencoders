@@ -1,29 +1,33 @@
+using Distributions
+using Random
+using StatsBase
+using SpecialFunctions
 
 struct HyperSphericalUniform <: ContinuousMultivariateDistribution
     m :: Int
 end
 
 struct HyperSphericalUniformSamplable <: Sampleable{Multivariate,Continuous}
-    dist::HyperSphericalUniform
+    m :: Int
 end
 
 Base.length(s::HyperSphericalUniform) = s.m
-Base.length(s::HyperSphericalUniformSamplable) = s.dist.m
-Base.eltype(::HyperSphericalUniformSamplable) = Vector{Float64}
-Distributions.sampler(s::HyperSphericalUniform) = HyperSphericalUniformSamplable(s)
+Base.eltype(::HyperSphericalUniformSamplable) = Float32
+Distributions.sampler(s::HyperSphericalUniform) = HyperSphericalUniformSamplable(s.m)
 
-
-function Distributions._rand!(rng::AbstractRNG, s::HyperSphericalUniformSamplable, x::AbstractVector{T}) where T<:Real
-    samp = rand(Normal(0, 1), s.dist.m)
-    x .= samp ./ norm(samp)
- 
+function Distributions._rand!(rng::AbstractRNG, ::HyperSphericalUniformSamplable, x::AbstractVector{T}) where T<:Real
+    x .= randn(rng, T, length(x))
+    normalize!(x)
 end
 
-function entropy(s::HyperSphericalUniform)
-    lγ = (s.m + 1) / 2
-    return log(2) + ((s.m + 1) / 2) * log(π) - lγ
+Distributions._rand!(rng::AbstractRNG, d::HyperSphericalUniform, x) =
+    _rand!(rng, sampler(d), x)
+
+
+function StatsBase.entropy(s::HyperSphericalUniform)
+    return 1/2 * s.m * log(pi) - lgamma(s.m/2) + log(2)
 end
 
 function Distributions._logpdf(s::HyperSphericalUniform, x)
-    return -ones(size(x)) * entropy(s)
+    return -entropy(s)
 end
