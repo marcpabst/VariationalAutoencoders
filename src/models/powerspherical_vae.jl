@@ -12,7 +12,7 @@ using Distributions: log1mexp
 """
 Hyperspherical Variational Autoencoder as proposed by 
 """
-mutable struct HypersphericalVAE <: AbstractVariationalAutoencoder
+mutable struct PowerSphericalVAE <: AbstractVariationalAutoencoder
     in_channels::Int
     latent_dims::Int
     encoder::@NamedTuple{chain::Chain, μ::Any, logκ::Any}
@@ -20,7 +20,7 @@ mutable struct HypersphericalVAE <: AbstractVariationalAutoencoder
     use_gpu::Bool
 end
 
-function HypersphericalVAE(
+function PowerSphericalVAE(
                   in_channels::Int, 
                   latent_dims::Int; 
                   encoder_backbone_out_dim = 512*4,
@@ -42,7 +42,7 @@ function HypersphericalVAE(
 
     decoder = decoder_backbone |> device
     
-    return HypersphericalVAE(in_channels, 
+    return PowerSphericalVAE(in_channels, 
                     latent_dims, 
                     encoder, 
                     decoder,
@@ -50,7 +50,7 @@ function HypersphericalVAE(
 end
 
 
-function model_loss(model::HypersphericalVAE, x)
+function model_loss(model::PowerSphericalVAE, x)
 
     device = model.use_gpu ? gpu : cpu; x = x |> device
 
@@ -68,8 +68,7 @@ function model_loss(model::HypersphericalVAE, x)
     kappas = cpu(vec(logκ))
 
     prior = HyperSphericalUniform(2)
-    dists = [VonMisesFisher{Float32}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
-    #dists = PowerSpherical.(mean_dirs, kappas; check_args = false, normalize_μ = true)
+    dists = PowerSpherical.(mean_dirs, kappas; check_args = false, normalize_μ = true)
     loss_KL = kldivergence.(dists, [prior]) |> mean
 
     #loss_KL = mean([KL_div_stable(model.latent_dims, k) for k in vec(cpu(logκ))])
@@ -79,7 +78,7 @@ function model_loss(model::HypersphericalVAE, x)
     return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL)
 end
 
-function encode(model::HypersphericalVAE, x)
+function encode(model::PowerSphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
     result = model.encoder.chain(x |> device)
     
@@ -89,11 +88,11 @@ function encode(model::HypersphericalVAE, x)
 end
 
 
-function decode(model::HypersphericalVAE, z)
+function decode(model::PowerSphericalVAE, z)
     model.decoder(z)
 end
 
-function reconstruct(model::HypersphericalVAE, x)
+function reconstruct(model::PowerSphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
 
     # encode input
@@ -104,7 +103,6 @@ function reconstruct(model::HypersphericalVAE, x)
     kappas = cpu(vec(Float64.(logκ)))
 
     dists = [VonMisesFisher{Float64}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
-    #dists = [PowerSpherical(_mu, _kappa; check_args = false, normalize_μ = true) for (_mu,_kappa) in zip(mean_dirs, kappas)]
     z = hcat([rrand(d) for d in dists]...) |> device
 
     # decode from z
@@ -113,7 +111,7 @@ function reconstruct(model::HypersphericalVAE, x)
     return μ, logκ, reconstuction
 end
 
-function Flux.params(model::HypersphericalVAE)
+function Flux.params(model::PowerSphericalVAE)
     return Flux.params(model.encoder.chain,
                         model.encoder.μ,
                         model.encoder.logκ,
