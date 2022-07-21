@@ -4,17 +4,15 @@ using Distributions
 using Distributions: VonMisesFisherSampler, PowerSphericalSampler
 using Random
 
-rrand(rng::AbstractRNG, s::Distributions.Distribution) = rrand(rng, Distributions.rsampler(s))
-rrand(s::Distributions.Distribution) = rrand(Random.GLOBAL_RNG, Distributions.rsampler(s))
-
 rsampler(s::Distributions.Distribution) = Distributions.sampler(s)
-
+rrand(rng::AbstractRNG, s::Distributions.Distribution) = rrand(rng, rsampler(s))
+rrand(s::Distributions.Distribution) = rrand(Random.GLOBAL_RNG, rsampler(s))
 
 function rsampler(s::VonMisesFisher) 
     p = length(s.μ)
     b = _vmf_bval(p, s.κ)
     x0 = (1.0 - b) / (1.0 + b)
-    c = κ * x0 + (p - 1) * log1p(-abs2(x0))
+    c = s.κ * x0 + (p - 1) * log1p(-abs2(x0))
     v = _vmf_householder_vec(s.μ)
 
     VonMisesFisherSampler(p, s.κ, b, x0, c, v)
@@ -22,7 +20,7 @@ end
 
 function rrand(rng::AbstractRNG, spl::PowerSphericalSampler)
     z = rand(rng, spl.dist_b)
-    v = rand(rng, spl.dist_u.d)
+    v = rand(rng, spl.dist_u)
 
     t = 2 * z - 1
     m = sqrt(1 - t ^ 2) * v'
@@ -30,17 +28,17 @@ function rrand(rng::AbstractRNG, spl::PowerSphericalSampler)
     y = [t; m]
     e_1 = [1.; zeros(eltype(spl.μ), length(spl) - 1)]
 
-    û = e_1 - spl.μ
+    û = e_1 .- spl.μ
+
     u = normalize(û)
 
     return (-1) * (I(length(spl)) .- 2*u*u') * y
 end
 
+
 function rrand(rng::AbstractRNG, spl::VonMisesFisherSampler)
     w = _vmf_genw(rng, spl)
     p = spl.p
-
-    s = 0.0
 
     x = [w; randn(rng, p-1)]
     s = sum(abs2.(x[2:p]))
@@ -53,14 +51,17 @@ function rrand(rng::AbstractRNG, spl::VonMisesFisherSampler)
 end
 
 ### Core computation
-
 function _vmf_rot(v::AbstractVector, x::AbstractVector)
     # rotate
     scale = 2.0 * (v' * x)
-    printnl(scale, v)
-    x = @. x - (scale * v)
+
+    t = scale .* v
+
+
+    y = [x[i] - t[i] for i in 1:length(x)]
+
     #@. x -= (scale * v)
-    return x
+    return y
 end
 
 _vmf_bval(p::Int, κ::Real) = (p - 1) / (2.0κ + sqrt(4 * abs2(κ) + abs2(p - 1)))
@@ -95,7 +96,6 @@ function _vmf_genw(rng::AbstractRNG, p, b, x0, c, κ)
     end
 end
 
-
 _vmf_genw(rng::AbstractRNG, s::VonMisesFisherSampler) =
     _vmf_genw(rng, s.p, s.b, s.x0, s.c, s.κ)
 
@@ -104,14 +104,19 @@ function _vmf_householder_vec(μ::Vector{Float64})
     #  can compute v in a single pass over μ
 
     p = length(μ)
-    v = similar(μ)
-    v[1] = μ[1] - 1.0
-    s = sqrt(-2*v[1])
-    v[1] /= s
+    # v = similar(μ)
+    # v[1] = μ[1] - 1.0
+    # s = sqrt(-2*v[1])
+    # v[1] /= s
 
-    @inbounds for i in 2:p
-        v[i] = μ[i] / s
-    end
+    # @inbounds for i in 2:p
+    #     v[i] = μ[i] / s
+    # end
 
+    v1 = μ[1] - 1.0
+    s = sqrt(-2*v1)
+    v1 = v1 / s
+    v = [v1; μ[2:p] ./ s]
+    
     return v
 end
