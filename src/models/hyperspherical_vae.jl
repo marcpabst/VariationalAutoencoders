@@ -5,6 +5,7 @@ using SpecialFunctions
 using LinearAlgebra
 using CUDA
 using ChainRulesCore
+using StatsBase
 using Distributions: log1mexp
 
 
@@ -67,7 +68,8 @@ function model_loss(model::HypersphericalVAE, x)
     kappas = cpu(vec(logκ))
 
     prior = HyperSphericalUniform(2)
-    dists = PowerSpherical.(mean_dirs, kappas; check_args = false, normalize_μ = true)
+    dists = [VonMisesFisher{Float32}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
+    #dists = PowerSpherical.(mean_dirs, kappas; check_args = false, normalize_μ = true)
     loss_KL = kldivergence.(dists, [prior]) |> mean
 
     #loss_KL = mean([KL_div_stable(model.latent_dims, k) for k in vec(cpu(logκ))])
@@ -101,7 +103,8 @@ function reconstruct(model::HypersphericalVAE, x)
     mean_dirs = cpu(collect.(eachcol(μ)))
     kappas = cpu(vec(logκ))
 
-    dists = [PowerSpherical(_mu, _kappa; check_args = false, normalize_μ = true) for (_mu,_kappa) in zip(mean_dirs, kappas)]
+    dists = [VonMisesFisher{Float32}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
+    #dists = [PowerSpherical(_mu, _kappa; check_args = false, normalize_μ = true) for (_mu,_kappa) in zip(mean_dirs, kappas)]
     z = hcat([rrand(d) for d in dists]...) |> device
 
     # decode from z
@@ -124,21 +127,24 @@ end
 
 # end
 
-# logbesseli(a,b) = b + log(besselix(a, b))
+logbesseli(a,b) = b + log(besselix(a, b))
 # C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2 - 1, κ))
-# logC(m, κ) = 1/2 * ( (m - 2) * log(κ) - 2 * logbesseli(m/2 - 1, κ) + m * (-log(2pi)))
+logC(m, κ) = 1/2 * ( (m - 2) * log(κ) - 2 * logbesseli(m/2 - 1, κ) + m * (-log(2pi)))
 
-# """
-# Numerically stable KL divergence.
-# """
-# function KL_div_stable(m, κ)
-#     return κ * besselix(m / 2, κ) / besselix(m / 2 - 1, κ) +
-#                 logC(m, κ) -
-#                 log( 1/ ( (2 * (π^(m / 2))) / gamma(m / 2) ))
-# end
+"""
+Numerically stable KL divergence.
+"""
+function StatsBase.kldivergence(p::VonMisesFisher, q::HyperSphericalUniform)
+    κ, m = p.κ, q.d
+
+    return κ * besselix(m / 2, κ) / besselix(m / 2 - 1, κ) +
+                logC(m, κ) -
+                log( 1/ ( (2 * (π^(m / 2))) / gamma(m / 2) ))
+end
 
 
 # Distributions
 function KL(p::PowerSpherical, q::HyperSphericalUniform)
     return -entropy(p) + entropy(q)
 end
+
