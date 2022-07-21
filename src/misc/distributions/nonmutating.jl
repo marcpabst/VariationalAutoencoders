@@ -41,7 +41,7 @@ end
 
 ### Core computation
 
-@inline function _vmf_rot(v::AbstractVector, x::AbstractVector)
+function _vmf_rot(v::AbstractVector, x::AbstractVector)
     # rotate
     scale = 2.0 * (v' * x)
     x = x .- (scale .* v)
