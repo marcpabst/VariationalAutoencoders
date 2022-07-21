@@ -6,13 +6,21 @@ using Zygote
 using CUDA
 using Random
 using DataFrames
+using Statistics
 
 """
 Default training loop for VAEs.
 """
-function train!(model::AbstractVariationalAutoencoder, training_data, args; 
+function train!(model::AbstractVariationalAutoencoder, training_data, testing_data, args; 
                 start_epoch = 1, 
-                logdf = DataFrame(epoch = Int[], loss = Float64[], KL_loss = Float64[], recon_loss = Float64[]),
+                logdf = DataFrame(
+                            epoch = Int[], 
+                            loss = Float64[], 
+                            KL_loss = Float64[], 
+                            recon_loss = Float64[], 
+                            kappa_mean = Float64[], 
+                            kappa_var = Float64[]
+                            ),
                 cb::Union{Function, Nothing} = nothing,
                 pp::Union{Function, Nothing} = nothing,
                 seed = 42)
@@ -28,6 +36,7 @@ function train!(model::AbstractVariationalAutoencoder, training_data, args;
     
     @showprogress for epoch in start_epoch:args[:epochs]
 
+        # keep track of loss
         _loss, _loss_KL, _loss_recon = 0., 0., 0.
 
         data_loader = MLUtils.DataLoader(training_data; batchsize=args[:batchsize], shuffle=true)
@@ -55,11 +64,17 @@ function train!(model::AbstractVariationalAutoencoder, training_data, args;
 
         end
 
+        # keep track of kappa from test_data after every epoch
+        predictions = [reconstruct(model, testing_data[i:i]) for i in 1:length(testing_data)];
+        kappas = cpu(first.(getindex.(predictions, 2)));
+
         # push loss to logdf
         push!(logdf, [epoch, 
             first(_loss), 
             first(_loss_KL), 
-            first(_loss_recon)
+            first(_loss_recon),
+            mean(kappas),
+            var(kappas),
             ]);
 
         # call callback

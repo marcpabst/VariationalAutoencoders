@@ -4,7 +4,7 @@ module VariationalAutoencoders
 include("models/abstract_variational_autoencoder.jl")
 
 # include("misc/distributions/hyperspherical_uniform.jl")
-# include("misc/distributions/powerspherical.jl")
+include("misc/distributions/nonmutating.jl")
 
 include("models/backbones.jl")
 include("models/mssim_vae.jl")
@@ -29,25 +29,8 @@ export VonMisesFisher2
 export default_encoder_backbone64x64, default_decoder_backbone64x64
 export small_encoder_backbone64x64, small_decoder_backbone64x64
 
+export rrand
 
 export ssim
-
-
-function Distributions.rand(rng::AbstractRNG, spl::PowerSphericalSampler)
-    z = rand(rng, spl.dist_b)
-    v = rand(rng, spl.dist_u)
-
-    t = 2 * z - 1
-    m = sqrt(1 - t ^ 2) * v'
-
-    y = [t; m]
-    e_1 = [1.; zeros(eltype(spl.μ), length(spl) -1)]
-
-    û = e_1 - spl.μ
-    u = normalize(û)
-
-    return (-1) * (I(length(spl)) .- 2*u*u') * y
-end
-
 
 end

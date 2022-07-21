@@ -63,12 +63,12 @@ function model_loss(model::HypersphericalVAE, x)
     loss_recon = mean(loss_recon)
 
     # KL loss
-    normalized_mean_dirs = cpu(normalize.(collect.(eachcol(μ))))
+    mean_dirs = cpu(collect.(eachcol(μ)))
     kappas = cpu(vec(logκ))
 
     prior = HyperSphericalUniform(2)
-    dists = PowerSpherical.(normalized_mean_dirs, kappas)
-    loss_KL = KL.(dists, [prior]) |> mean
+    dists = PowerSpherical.(mean_dirs, kappas; check_args = false, normalize_μ = true)
+    loss_KL = kldivergence.(dists, [prior]) |> mean
 
     #loss_KL = mean([KL_div_stable(model.latent_dims, k) for k in vec(cpu(logκ))])
 
@@ -98,15 +98,14 @@ function reconstruct(model::HypersphericalVAE, x)
     μ, logκ = encode(model, x)
 
     # sample from distribution
-    normalized_mean_dirs = cpu(normalize.(collect.(eachcol(μ))))
+    mean_dirs = cpu(collect.(eachcol(μ)))
     kappas = cpu(vec(logκ))
 
-    #prior = HyperSphericalUniform(length(μ))
-    dists = [PowerSpherical(_mu, _kappa) for (_mu,_kappa) in zip(normalized_mean_dirs, kappas)]
-    z = hcat([sample(d) for d in dists]...) |> device
+    dists = [PowerSpherical(_mu, _kappa; check_args = false, normalize_μ = true) for (_mu,_kappa) in zip(mean_dirs, kappas)]
+    z = hcat([rrand(d) for d in dists]...) |> device
 
     # decode from z
-    reconstuction = decode(model, z)
+    reconstuction = decode(model, Float32.(z))
 
     return μ, logκ, reconstuction
 end
