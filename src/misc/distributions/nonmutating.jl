@@ -44,6 +44,7 @@ end
 function _vmf_rot(v::AbstractVector, x::AbstractVector)
     # rotate
     scale = 2.0 * (v' * x)
+    printnl(scale, v)
     x = @. x - (scale * v)
     #@. x -= (scale * v)
     return x
