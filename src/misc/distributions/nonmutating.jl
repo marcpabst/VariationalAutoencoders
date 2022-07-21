@@ -1,12 +1,13 @@
 # non-mutating versions of samplers
 
 using Distributions
+using Distributions: VonMisesFisherSampler, PowerSphericalSampler
 using Random
 
 rrand(rng::AbstractRNG, s::Distributions.Distribution) = rrand(rng, Distributions.sampler(s))
 rrand(s::Distributions.Distribution) = rrand(Random.GLOBAL_RNG, Distributions.sampler(s))
 
-function rrand(rng::AbstractRNG, spl::Distributions.PowerSphericalSampler)
+function rrand(rng::AbstractRNG, spl::PowerSphericalSampler)
     z = rand(rng, spl.dist_b)
     v = rand(rng, spl.dist_u.d)
 
@@ -22,7 +23,7 @@ function rrand(rng::AbstractRNG, spl::Distributions.PowerSphericalSampler)
     return (-1) * (I(length(spl)) .- 2*u*u') * y
 end
 
-function rrand(rng::AbstractRNG, spl::Distributions.VonMisesFisherSampler)
+function rrand(rng::AbstractRNG, spl::VonMisesFisherSampler)
     w = _vmf_genw(rng, spl)
     p = spl.p
 
