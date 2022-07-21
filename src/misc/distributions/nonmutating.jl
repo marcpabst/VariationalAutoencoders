@@ -36,7 +36,7 @@ function rrand(rng::AbstractRNG, spl::VonMisesFisherSampler)
 
     x = [x[1]; x[2:p] .* r]
 
-    return _vmf_rot!(spl.v, x)
+    return _vmf_rot(spl.v, x)
 end
 
 ### Core computation
