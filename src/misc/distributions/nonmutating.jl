@@ -4,8 +4,21 @@ using Distributions
 using Distributions: VonMisesFisherSampler, PowerSphericalSampler
 using Random
 
-rrand(rng::AbstractRNG, s::Distributions.Distribution) = rrand(rng, Distributions.sampler(s))
-rrand(s::Distributions.Distribution) = rrand(Random.GLOBAL_RNG, Distributions.sampler(s))
+rrand(rng::AbstractRNG, s::Distributions.Distribution) = rrand(rng, Distributions.rsampler(s))
+rrand(s::Distributions.Distribution) = rrand(Random.GLOBAL_RNG, Distributions.rsampler(s))
+
+rsampler(s::Distributions.Distribution) = Distributions.sampler(s)
+
+
+function rsampler(s::VonMisesFisher) 
+    p = length(s.μ)
+    b = _vmf_bval(p, s.κ)
+    x0 = (1.0 - b) / (1.0 + b)
+    c = κ * x0 + (p - 1) * log1p(-abs2(x0))
+    v = _vmf_householder_vec(s.μ)
+
+    VonMisesFisherSampler(p, s.κ, b, x0, c, v)
+end
 
 function rrand(rng::AbstractRNG, spl::PowerSphericalSampler)
     z = rand(rng, spl.dist_b)
