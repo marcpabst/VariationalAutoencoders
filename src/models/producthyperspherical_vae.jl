@@ -12,7 +12,7 @@ using Distributions: log1mexp
 """
 Hyperspherical Variational Autoencoder as proposed by 
 """
-mutable struct HypersphericalVAE <: AbstractVariationalAutoencoder
+mutable struct ProductHypersphericalVAE <: AbstractVariationalAutoencoder
     in_channels::Int
     latent_dims::Int
     encoder::@NamedTuple{chain::Chain, μ::Any, logκ::Any}
@@ -20,12 +20,12 @@ mutable struct HypersphericalVAE <: AbstractVariationalAutoencoder
     use_gpu::Bool
 end
 
-function HypersphericalVAE(
+function ProductHypersphericalVAE(
                   in_channels::Int, 
                   latent_dims::Int; 
                   encoder_backbone_out_dim = 512*4,
                   encoder_backbone = default_encoder_backbone64x64(in_channels, [32, 64, 128, 256, 512]),
-                  decoder_backbone = default_decoder_backbone64x64(latent_dims, in_channels, reverse([32, 64, 128, 256, 512])),
+                  decoder_backbone = default_decoder_backbone64x64(latent_dims*2, in_channels, reverse([32, 64, 128, 256, 512])),
                   use_gpu = false,
                   seed = 42)
     
@@ -36,13 +36,13 @@ function HypersphericalVAE(
 
     encoder = (
         chain = encoder_backbone |> device,
-        μ  = Dense(encoder_backbone_out_dim, latent_dims, ) |> device, # μ
-        logκ = Chain(Dense(encoder_backbone_out_dim, 1, softplus), x -> x .+ 1) |> device,
+        μ  = Dense(encoder_backbone_out_dim, latent_dims*2, ) |> device, # μ
+        logκ = Chain(Dense(encoder_backbone_out_dim, latent_dims, softplus), x -> x .+ 1) |> device,
     )
 
     decoder = decoder_backbone |> device
     
-    return HypersphericalVAE(in_channels, 
+    return ProductHypersphericalVAE(in_channels, 
                     latent_dims, 
                     encoder, 
                     decoder,
@@ -50,7 +50,7 @@ function HypersphericalVAE(
 end
 
 
-function model_loss(model::HypersphericalVAE, x)
+function model_loss(model::ProductHypersphericalVAE, x)
 
     device = model.use_gpu ? gpu : cpu; x = x |> device
 
@@ -64,22 +64,27 @@ function model_loss(model::HypersphericalVAE, x)
     loss_recon = mean(loss_recon)
 
     # KL loss
-    mean_dirs = cpu(collect.(eachcol(μ)))
-    kappas = cpu(vec(logκ))
 
-    prior = HyperSphericalUniform(modle.latent_dims)
-    dists = [VonMisesFisher{Float32}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
-    #dists = PowerSpherical.(mean_dirs, kappas; check_args = false, normalize_μ = true)
-    loss_KL = kldivergence.(dists, [prior]) |> mean
+    prior = HyperSphericalUniform(model.latent_dims)
 
-    #loss_KL = mean([KL_div_stable(model.latent_dims, k) for k in vec(cpu(logκ))])
+    loss_KL = 0f0
+
+    for d in model.latent_dims
+        mean_dirs = cpu(collect.(eachcol(μ[d*2:d*2+1,:])))
+        kappas = cpu(vec(logκ[d,:]))
+    
+        dists = [VonMisesFisher{Float32}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
+
+        loss_KL += kldivergence.(dists, [prior]) |> mean
+
+    end
 
     loss = loss_recon + loss_KL
 
     return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL)
 end
 
-function encode(model::HypersphericalVAE, x)
+function encode(model::ProductHypersphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
     result = model.encoder.chain(x |> device)
     
@@ -89,11 +94,11 @@ function encode(model::HypersphericalVAE, x)
 end
 
 
-function decode(model::HypersphericalVAE, z)
+function decode(model::ProductHypersphericalVAE, z)
     model.decoder(z)
 end
 
-function reconstruct(model::HypersphericalVAE, x)
+function reconstruct(model::ProductHypersphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
 
     # encode input
@@ -113,7 +118,7 @@ function reconstruct(model::HypersphericalVAE, x)
     return μ, logκ, reconstuction
 end
 
-function Flux.params(model::HypersphericalVAE)
+function Flux.params(model::ProductHypersphericalVAE)
     return Flux.params(model.encoder.chain,
                         model.encoder.μ,
                         model.encoder.logκ,
