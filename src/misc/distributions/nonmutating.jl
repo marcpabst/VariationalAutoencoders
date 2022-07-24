@@ -9,8 +9,6 @@ rrand(rng::AbstractRNG, s::Distributions.Distribution) = rrand(rng, rsampler(s))
 rrand(s::Distributions.Distribution) = rrand(Random.GLOBAL_RNG, rsampler(s))
 
 
-
-
 function rsampler(s::VonMisesFisher) 
     p = length(s.μ)
     b = _vmf_bval(p, s.κ)
