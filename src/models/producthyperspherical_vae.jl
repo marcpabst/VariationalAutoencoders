@@ -15,7 +15,7 @@ Hyperspherical Variational Autoencoder as proposed by
 mutable struct ProductHypersphericalVAE <: AbstractVariationalAutoencoder
     in_channels::Int
     latent_dims::Int
-    encoder::@NamedTuple{chain::Chain, μ::Any, logκ::Any}
+    encoder::@NamedTuple{chain::Chain, θ::Any, κ::Any}
     decoder::Chain
     use_gpu::Bool
 end
@@ -36,8 +36,8 @@ function ProductHypersphericalVAE(
 
     encoder = (
         chain = encoder_backbone |> device,
-        μ  = Dense(encoder_backbone_out_dim, latent_dims*2, ) |> device, # μ
-        logκ = Chain(Dense(encoder_backbone_out_dim, latent_dims, softplus), x -> x .+ 1) |> device,
+        θ  = Dense(encoder_backbone_out_dim, latent_dims) |> device, # mean angle
+        κ = Chain(Dense(encoder_backbone_out_dim, latent_dims, softplus), x -> x .+ 1) |> device, # concentration
     )
 
     decoder = decoder_backbone |> device
@@ -54,10 +54,9 @@ function model_loss(model::ProductHypersphericalVAE, x)
 
     device = model.use_gpu ? gpu : cpu; x = x |> device
 
-    μ, logκ, reconstruction = reconstruct(model, x)
+    θ, κ, reconstruction = reconstruct(model, x)
 
     # reconstruction loss
-    #loss_recon = Flux.logitbinarycrossentropy(reconstruction, x; agg = sum) / size(x,4)
 
     loss_recon = Flux.logitbinarycrossentropy(Flux.flatten(reconstruction), Flux.flatten(x), agg = identity)
     loss_recon = sum(loss_recon, dims = 1)
@@ -70,16 +69,16 @@ function model_loss(model::ProductHypersphericalVAE, x)
     loss_KL = 0f0
 
     for d in model.latent_dims
-        mean_dirs = cpu(collect.(eachcol(μ[d*2:d*2+1,:])))
-        kappas = cpu(vec(logκ[d,:]))
+        thetas = Float64.(cpu(vec(θ[d,:])))
+        kappas = Float64.(cpu(vec(κ[d,:])))
     
-        dists = [VonMisesFisher{Float32}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
+        dists = [VonMisesFisher{Float64}([cos(_theta), sin(_theta)], _kappa; checknorm = false) for (_theta,_kappa) in zip(thetas, kappas)]
 
         loss_KL += kldivergence.(dists, [prior]) |> mean
 
     end
 
-    loss = loss_recon + loss_KL
+    loss = Float32(loss_recon + loss_KL)
 
     return (loss = loss, loss_recon = loss_recon, loss_KL = loss_KL)
 end
@@ -88,7 +87,7 @@ function encode(model::ProductHypersphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
     result = model.encoder.chain(x |> device)
     
-    z_μ, z_logκ = model.encoder.μ(result), model.encoder.logκ(result)
+    z_μ, z_logκ = model.encoder.θ(result), model.encoder.κ(result)
 
     return (μ = z_μ, logκ = z_logκ)
 end
@@ -102,35 +101,37 @@ function reconstruct(model::ProductHypersphericalVAE, x)
     device = model.use_gpu ? gpu : cpu
 
     # encode input
-    μ, logκ = encode(model, x)
+    θ, κ = encode(model, x)
+
+    z = zeros(size(θ))
 
     # sample from distribution
-    mean_dirs = cpu(collect.(eachcol(Float64.(μ))))
-    kappas = cpu(vec(Float64.(logκ)))
+    for d in model.latent_dims
+        thetas = Float64.(cpu(vec(θ[d,:])))
+        kappas = Float64.(cpu(vec(κ[d,:])))
+    
+        dists = [VonMisesFisher{Float64}([cos(_theta), sin(_theta)], _kappa; checknorm = false) for (_theta,_kappa) in zip(thetas, kappas)]
 
-    dists = [VonMisesFisher{Float64}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
+        z[d,:] = hcat([atan(rrand(d)...) for d in dists]...)
+    end
+
+    #dists = [VonMisesFisher{Float64}(normalize(_mu), _kappa; checknorm = false) for (_mu,_kappa) in zip(mean_dirs, kappas)]
     #dists = [PowerSpherical(_mu, _kappa; check_args = false, normalize_μ = true) for (_mu,_kappa) in zip(mean_dirs, kappas)]
-    z = hcat([rrand(d) for d in dists]...) |> device
+    #z = hcat([rrand(d) for d in dists]...) |> device
 
     # decode from z
-    reconstuction = decode(model, Float32.(z))
+    reconstuction = decode(model, device(Float32.(z)))
 
-    return μ, logκ, reconstuction
+    return θ, κ, reconstuction
 end
 
 function Flux.params(model::ProductHypersphericalVAE)
     return Flux.params(model.encoder.chain,
-                        model.encoder.μ,
-                        model.encoder.logκ,
+                        model.encoder.θ,
+                        model.encoder.κ,
                         model.decoder)
 end
 
-# function KL_div(m, κ)
-#     return κ * besseli(m/2, κ) / besseli(m/2-1, κ) +
-#                log(C(m, κ)) -
-#                log( (2 * (pi^(m/2))) / gamma(m/2) )^(-1)
-
-# end
 
 logbesseli(a,b) = b + log(besselix(a, b))
 # C(m, κ) = (κ^(m/2 - 1)) / ( (2pi)^(m/2) * besseli(m/2 - 1, κ))
